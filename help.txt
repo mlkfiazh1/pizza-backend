@@ -1,0 +1,32 @@
+user { _id, name, email, password, role, otp_code, status, created_at, updated_at }
+category { _id, name, status, created_at, updated_at }
+size { _id, name, symbol, status, created_at, updated_at }
+pizza { _id, name, category, description, image, status, created_at, updated_at }
+pizza-size { _id, name, pizza, size, price, status, created_at, updated_at }
+order { _id, user, status, created_at, updated_at }
+order_details { _id, order, pizza, size, quantity, price, total, status, created_at, updated_at }
+contact { _id, name, email, message, status, created_at, updated_at }
+
+POST /auth/signup // CUSTOMER
+POST /auth/login  // CUSTOMER, ADMIN
+POST /auth/forget-password // CUSTOMER
+
+GET /users // ADMIN 
+GET /users/:id // ADMIN
+
+GET /pizzas // ADMIN - CUSTOMER
+POST /pizzas // ADMIN
+GET /pizzas/:id // ADMIN - CUSTOMER
+PATCH /pizzas/:id // ADMIN
+DELETE /pizzas/:id // ADMIN
+GET /pizzas/pizza-of-the-day // ADMIN - CUSTOMER
+POST /pizzas/pizza-of-the-day // ADMIN
+
+GET /orders // ADMIN - CUSTOMER
+POST /orders // CUSTOMER
+GET /orders/:id // ADMIN - CUSTOMER
+DELETE /orders/:id // ADMIN - CUSTOMER
+GET /past-orders // ADMIN - CUSTOMER
+GET /past-order/:order_id // ADMIN - CUSTOMER
+
+POST /contact // CUSTOMER
