@@ -24,7 +24,7 @@ This document explains the NestJS + Mongoose data layer and how the **Auth** fea
         ▼
  AuthModule         → feature that consumes UserRepository
    │
-   ├── auth.dto         → request shapes (SigninDto, SignupDto)
+   ├── auth.dto         → request shapes + class-validator rules (SigninDto, SignupDto)
    ├── auth.interface   → token-payload types
    ├── auth.service     → signup / signin / JWT + encrypt
    ├── auth.controller  → HTTP routes under /auth
@@ -33,11 +33,64 @@ This document explains the NestJS + Mongoose data layer and how the **Auth** fea
 
 `AppModule` imports `ConfigModule`, `DatabaseModule`, and `AuthModule` so the full stack boots together.
 
+Before feature modules handle requests, `main.ts` configures **CORS** and a global **ValidationPipe** so every route gets the same cross-origin policy and DTO validation behavior.
+
+---
+
+## 0. Bootstrap (`main.ts`) — CORS & DTO validation
+
+**Role:** App entry point. After `NestFactory.create`, it enables CORS, registers a global `ValidationPipe`, then listens on `PORT` (default `3000`).
+
+```ts
+app.enableCors({
+  origin: true,
+  credentials: true,
+});
+
+app.useGlobalPipes(
+  new ValidationPipe({
+    transform: true,
+    forbidNonWhitelisted: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
+  }),
+);
+```
+
+### CORS (`enableCors`)
+
+| Option              | Meaning                                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `origin: true`      | Reflect the request’s `Origin` header — browsers may call the API from any origin (useful in local/dev; tighten to an allowlist in production). |
+| `credentials: true` | Allow cookies / `Authorization` headers on cross-origin requests (`Access-Control-Allow-Credentials`).                                          |
+
+Without this, a frontend on another host/port would be blocked by the browser before the request reaches Nest.
+
+### Global `ValidationPipe` (DTO validation)
+
+Controllers type `@Body()` with DTO classes (e.g. `SigninDto`, `SignupDto`). Those classes use **`class-validator`** decorators (`@IsEmail()`, `@IsNotEmpty()`, …). The global pipe runs on every incoming payload **before** the handler:
+
+1. Instantiates the DTO class from the raw JSON body.
+2. Runs the decorator rules.
+3. On failure → Nest returns `400 Bad Request` with validation errors (handler never runs).
+4. On success → the controller receives a typed, validated object.
+
+| Option                           | Meaning                                                                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `transform: true`                | Convert the plain body object into a real DTO class instance (required for decorator-based validation to run reliably).   |
+| `forbidNonWhitelisted: true`     | Reject requests that include properties **not** declared on the DTO (extra fields → error instead of being ignored).      |
+| `enableImplicitConversion: true` | Coerce query/path/body primitives to the DTO property types (e.g. `"10"` → `number` when the field is typed as `number`). |
+
+**How it ties to Auth DTOs:** `POST /auth/v1/sign-in` and `sign-up` bind `@Body()` to `SigninDto` / `SignupDto`. Invalid email, empty fields, or a weak password fail in the pipe; only valid payloads reach `AuthService`.
+
+Requires `class-validator` and `class-transformer` (Nest’s validation stack).
+
 ---
 
 ## 1. Config (`config/index.ts`)
 
-**Role:** Tell Mongoose *where* and *how* to connect.
+**Role:** Tell Mongoose _where_ and _how_ to connect.
 
 ```ts
 export class MongooseConfig implements MongooseOptionsFactory {
@@ -50,11 +103,11 @@ export class MongooseConfig implements MongooseOptionsFactory {
 }
 ```
 
-| Piece | Meaning |
-| --- | --- |
+| Piece                    | Meaning                                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `MongooseOptionsFactory` | Nest contract: implement `createMongooseOptions()` so options can be built asynchronously / from env. |
-| `uri` | MongoDB connection string (`MONGODB_URL` in `.env`). |
-| `dbName` | Target database name (`MONGODB_DATABASE_NAME` in `.env`). |
+| `uri`                    | MongoDB connection string (`MONGODB_URL` in `.env`).                                                  |
+| `dbName`                 | Target database name (`MONGODB_DATABASE_NAME` in `.env`).                                             |
 
 Used by `MongooseModule.forRootAsync({ useClass: MongooseConfig })` so connection settings stay out of the module file and can grow later (timeouts, retries, auth) without touching feature code.
 
@@ -79,13 +132,13 @@ Used by `MongooseModule.forRootAsync({ useClass: MongooseConfig })` so connectio
 export class DatabaseModule {}
 ```
 
-| Chunk | What it does |
-| --- | --- |
-| `ConfigModule.forRoot()` | Loads `.env` so `process.env.MONGODB_*` is available to `MongooseConfig`. |
-| `MongooseModule.forRootAsync(...)` | Opens the global MongoDB connection using `MongooseConfig`. |
-| `MongooseModule.forFeature(Models)` | Registers each schema/model (from the provider) for injection via `@InjectModel`. |
-| `providers: [UserRepository]` | Makes repositories available inside this module. |
-| `exports: [UserRepository]` | Lets other modules (`AuthModule`, `AppModule`) inject repositories without re-registering Mongoose. |
+| Chunk                               | What it does                                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ConfigModule.forRoot()`            | Loads `.env` so `process.env.MONGODB_*` is available to `MongooseConfig`.                           |
+| `MongooseModule.forRootAsync(...)`  | Opens the global MongoDB connection using `MongooseConfig`.                                         |
+| `MongooseModule.forFeature(Models)` | Registers each schema/model (from the provider) for injection via `@InjectModel`.                   |
+| `providers: [UserRepository]`       | Makes repositories available inside this module.                                                    |
+| `exports: [UserRepository]`         | Lets other modules (`AuthModule`, `AppModule`) inject repositories without re-registering Mongoose. |
 
 `DatabaseModule` is imported in `AppModule` and feature modules that need DB access (e.g. `AuthModule`).
 
@@ -111,26 +164,26 @@ export class User {
 export const UserSchema = SchemaFactory.createForClass(User);
 ```
 
-| Piece | Meaning |
-| --- | --- |
-| `@Schema({ versionKey: false })` | Disables Mongoose’s `__v` version key on documents. |
-| `@Prop(...)` | Declares each field’s type and defaults. |
+| Piece                                | Meaning                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| `@Schema({ versionKey: false })`     | Disables Mongoose’s `__v` version key on documents.                 |
+| `@Prop(...)`                         | Declares each field’s type and defaults.                            |
 | `SchemaFactory.createForClass(User)` | Builds the Mongoose schema object Nest registers with `forFeature`. |
-| `schemas/index.ts` | Barrel export so consumers import from `./schemas`. |
+| `schemas/index.ts`                   | Barrel export so consumers import from `./schemas`.                 |
 
 ### User fields (current)
 
-| Field | Notes |
-| --- | --- |
-| `_id` | MongoDB ObjectId |
-| `name`, `email`, `password` | Required identity / auth fields |
-| `attempts` | Login attempt counter (default `0`) |
-| `role` | `1` admin, `2` customer (default `2`) |
-| `otp_code` | Optional OTP |
-| `status` | `0` deleted, `1` active, `2` inactive, `3` unverified (default `1`) |
-| `create_at`, `updated_at` | Timestamps (default `Date.now`) |
+| Field                       | Notes                                                               |
+| --------------------------- | ------------------------------------------------------------------- |
+| `_id`                       | MongoDB ObjectId                                                    |
+| `name`, `email`, `password` | Required identity / auth fields                                     |
+| `attempts`                  | Login attempt counter (default `0`)                                 |
+| `role`                      | `1` admin, `2` customer (default `2`)                               |
+| `otp_code`                  | Optional OTP                                                        |
+| `status`                    | `0` deleted, `1` active, `2` inactive, `3` unverified (default `1`) |
+| `create_at`, `updated_at`   | Timestamps (default `Date.now`)                                     |
 
-Schemas describe *structure*. They do not run queries; repositories do.
+Schemas describe _structure_. They do not run queries; repositories do.
 
 ---
 
@@ -160,11 +213,11 @@ export const Models = [
 ];
 ```
 
-| Property | Meaning |
-| --- | --- |
-| `name` | Token Nest uses for `@InjectModel(name)`. |
-| `schema` | The schema built from the class (`UserSchema`). |
-| `collection` | MongoDB collection name (`user`). |
+| Property     | Meaning                                         |
+| ------------ | ----------------------------------------------- |
+| `name`       | Token Nest uses for `@InjectModel(name)`.       |
+| `schema`     | The schema built from the class (`UserSchema`). |
+| `collection` | MongoDB collection name (`user`).               |
 
 Add a new entity by: defining a schema → adding a `MODEL.*` constant → appending an entry to `Models` → creating a repository → registering/exporting it in `DatabaseModule`.
 
@@ -183,19 +236,26 @@ export class UserRepository {
     @InjectModel(MODEL.USER) private readonly userModel: Model<User>,
   ) {}
 
-  async findOne(filter: QueryFilter<User>) { ... }
-  async create(document: Partial<User>) { ... }
-  async save(user: HydratedDocument<User>) { ... }
+  async findOne(filter: QueryFilter<User>) {
+    return this.userModel.findOne(filter);
+  }
+  async create(document: Partial<User>) {
+    const user = new this.userModel(document);
+    return (await user.save()).toJSON();
+  }
+  async save(user: HydratedDocument<User>) {
+    return (await user.save()).toJSON();
+  }
 }
 ```
 
-| Piece | Meaning |
-| --- | --- |
+| Piece                      | Meaning                                                  |
+| -------------------------- | -------------------------------------------------------- |
 | `@InjectModel(MODEL.USER)` | Injects the model registered in `Models` / `forFeature`. |
-| `findOne` | Lookup by filter (e.g. email). |
-| `create` | Build a document, `save()`, return plain JSON. |
-| `save` | Persist an already-hydrated document and return JSON. |
-| `repositories/index.ts` | Barrel export for clean imports. |
+| `findOne`                  | Lookup by filter (e.g. email).                           |
+| `create`                   | Build a document, `save()`, return plain JSON.           |
+| `save`                     | Persist an already-hydrated document and return JSON.    |
+| `repositories/index.ts`    | Barrel export for clean imports.                         |
 
 Feature services (e.g. `AuthService`) inject `UserRepository` after importing `DatabaseModule`. Business logic stays in services; persistence stays in repositories.
 
@@ -222,37 +282,55 @@ UserRepository     → Mongo persistence (from DatabaseModule)
 
 Shared enums used by auth live in `src/common/enums`:
 
-| Enum / config | Values / meaning |
-| --- | --- |
-| `EnumStatus` | `0` deleted, `1` active, `2` inactive, `3` unverified |
-| `EnumRole` | `0` guest, `1` admin, `2` user |
-| `EnumConfig.ALLOWED_ATTEMPTS` | `10` — max failed logins before account is blocked |
+| Enum / config                 | Values / meaning                                      |
+| ----------------------------- | ----------------------------------------------------- |
+| `EnumStatus`                  | `0` deleted, `1` active, `2` inactive, `3` unverified |
+| `EnumRole`                    | `0` guest, `1` admin, `2` user                        |
+| `EnumConfig.ALLOWED_ATTEMPTS` | `10` — max failed logins before account is blocked    |
 
 ---
 
 ### 6.1 DTO (`auth.dto.ts`)
 
-**Role:** Describe the shape of incoming request bodies. Controllers type `@Body()` with these classes so the payload is known at compile time.
+**Role:** Describe and **validate** incoming request bodies. Controllers type `@Body()` with these classes; the global `ValidationPipe` in `main.ts` enforces the `class-validator` rules before the handler runs.
 
 ```ts
 export class SigninDto {
+  @IsNotEmpty()
+  @IsEmail()
   readonly email: string;
+
+  @IsNotEmpty()
+  @IsStrongPassword()
   readonly password: string;
 }
 
 export class SignupDto {
+  @IsNotEmpty()
   readonly name: string;
+
+  @IsNotEmpty()
+  @IsEmail()
   readonly email: string;
+
+  @IsNotEmpty()
+  @IsStrongPassword()
   readonly password: string;
 }
 ```
 
-| DTO | Used by | Fields |
-| --- | --- | --- |
-| `SigninDto` | `POST /auth/v1/sign-in` | `email`, `password` |
-| `SignupDto` | `POST /auth/v1/sign-up` | `name`, `email`, `password` |
+| DTO         | Used by                 | Fields & rules                                                                       |
+| ----------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| `SigninDto` | `POST /auth/v1/sign-in` | `email` (`@IsNotEmpty`, `@IsEmail`), `password` (`@IsNotEmpty`, `@IsStrongPassword`) |
+| `SignupDto` | `POST /auth/v1/sign-up` | `name` (`@IsNotEmpty`), plus the same `email` / `password` rules as sign-in          |
 
-DTOs are transport contracts only. They do not hash passwords, query the DB, or issue tokens — that stays in the service.
+| Decorator             | Meaning                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `@IsNotEmpty()`       | Field must be present and non-empty.                                 |
+| `@IsEmail()`          | Value must be a valid email format.                                  |
+| `@IsStrongPassword()` | Password must meet strength rules (length, mixed character classes). |
+
+DTOs are transport + validation contracts only. They do not hash passwords, query the DB, or issue tokens — that stays in the service. Without the global pipe in `main.ts`, these decorators would not run automatically.
 
 ---
 
@@ -275,10 +353,10 @@ export interface ICreateAccessToken {
 }
 ```
 
-| Interface | Meaning |
-| --- | --- |
-| `ISigntoken` | Input to `signTokens()` after a successful login (user id, role, password hash for JWT claims). |
-| `ICreateAccessToken` | Input to `createAccessToken()` including `expiration_time` from env. |
+| Interface            | Meaning                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| `ISigntoken`         | Input to `signTokens()` after a successful login (user id, role, password hash for JWT claims). |
+| `ICreateAccessToken` | Input to `createAccessToken()` including `expiration_time` from env.                            |
 
 DTO = what the client sends. Interface = what auth helpers pass internally when building tokens.
 
@@ -321,9 +399,9 @@ export class AuthService {
 
 #### Token helpers (private)
 
-| Method | What it does |
-| --- | --- |
-| `signTokens` | Reads `ACCESS_TOKEN_EXPIRATION_TIME`, computes `expiresAt`, calls `createAccessToken`. |
+| Method              | What it does                                                                                                            |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `signTokens`        | Reads `ACCESS_TOKEN_EXPIRATION_TIME`, computes `expiresAt`, calls `createAccessToken`.                                  |
 | `createAccessToken` | `jwt.sign({ _id, role, password }, TOKEN_SECRET, { expiresIn })`, then encrypts the JWT with `Crypterjs(TOKEN_SECRET)`. |
 
 Env used here (in addition to Mongo): `TOKEN_SECRET`, `ACCESS_TOKEN_EXPIRATION_TIME`.
@@ -353,13 +431,13 @@ export class AuthController {
 }
 ```
 
-| Piece | Meaning |
-| --- | --- |
-| `@Controller('auth')` | Base path `/auth`. |
-| `@Post('/v1/sign-in')` | Full route `POST /auth/v1/sign-in`. |
-| `@Post('/v1/sign-up')` | Full route `POST /auth/v1/sign-up`. |
-| `@Body() payload: SigninDto \| SignupDto` | Nest binds JSON body to the DTO type. |
-| Constructor injection | Nest resolves `AuthService` from the module’s `providers`. |
+| Piece                                     | Meaning                                                    |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| `@Controller('auth')`                     | Base path `/auth`.                                         |
+| `@Post('/v1/sign-in')`                    | Full route `POST /auth/v1/sign-in`.                        |
+| `@Post('/v1/sign-up')`                    | Full route `POST /auth/v1/sign-up`.                        |
+| `@Body() payload: SigninDto \| SignupDto` | Nest binds JSON body to the DTO type.                      |
+| Constructor injection                     | Nest resolves `AuthService` from the module’s `providers`. |
 
 The controller does not touch the repository or hash passwords; it only orchestrates HTTP ↔ service.
 
@@ -378,11 +456,11 @@ The controller does not touch the repository or hash passwords; it only orchestr
 export class AuthModule {}
 ```
 
-| Chunk | What it does |
-| --- | --- |
-| `imports: [DatabaseModule]` | Makes exported `UserRepository` injectable inside this module (needed by `AuthService`). |
-| `controllers: [AuthController]` | Registers HTTP routes under `/auth`. |
-| `providers: [AuthService]` | Registers the service in Nest’s DI container for the controller. |
+| Chunk                           | What it does                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| `imports: [DatabaseModule]`     | Makes exported `UserRepository` injectable inside this module (needed by `AuthService`). |
+| `controllers: [AuthController]` | Registers HTTP routes under `/auth`.                                                     |
+| `providers: [AuthService]`      | Registers the service in Nest’s DI container for the controller.                         |
 
 Imported by `AppModule` alongside `DatabaseModule` and global `ConfigModule`:
 
@@ -412,15 +490,15 @@ export class AppModule {}
 
 ### B. Sign-up (`POST /auth/v1/sign-up`)
 
-1. Client sends `{ name, email, password }` → `AuthController.signup` binds `SignupDto`.
-2. `AuthService.signup` checks for an existing active user.
-3. Password is hashed with bcrypt; `UserRepository.create` persists the document (`role: USER`, `attempts: 0`).
+1. Client sends `{ name, email, password }` → global `ValidationPipe` validates `SignupDto` (reject `400` if rules fail).
+2. `AuthController.signup` receives the validated body → `AuthService.signup`.
+3. Service checks for an existing active user; password is hashed with bcrypt; `UserRepository.create` persists (`role: USER`, `attempts: 0`).
 4. Controller returns `{ message: 'User created successfully' }`.
 
 ### C. Sign-in (`POST /auth/v1/sign-in`)
 
-1. Client sends `{ email, password }` → `AuthController.signin` binds `SigninDto`.
-2. `AuthService.signin` loads the active user, checks status, compares password (with attempt lockout).
+1. Client sends `{ email, password }` → global `ValidationPipe` validates `SigninDto`.
+2. `AuthController.signin` → `AuthService.signin` loads the active user, checks status, compares password (with attempt lockout).
 3. On success: reset attempts, build JWT + encrypt with Crypterjs.
 4. Controller returns `{ message, data: { access_token, expiresAt, user } }`.
 
@@ -430,6 +508,7 @@ export class AppModule {}
 
 ```
 src/
+├── main.ts                       ← CORS + ValidationPipe + Swagger UI, listen
 ├── app.module.ts                 ← imports Config + Database + Auth
 ├── common/
 │   └── enums/index.ts            ← EnumStatus, EnumRole, EnumConfig
@@ -450,8 +529,115 @@ src/
 └── modules/
     └── auth/
         ├── auth.module.ts        ← feature module (imports DatabaseModule)
-        ├── auth.controller.ts    ← POST /auth/v1/sign-in|sign-up
-        ├── auth.dto.ts           ← SigninDto, SignupDto
+        ├── auth.controller.ts    ← @ApiTags('Auth') + POST /auth/v1/sign-in|sign-up
+        ├── auth.dto.ts           ← SigninDto, SignupDto (+ @ApiProperty)
         ├── auth.interface.ts     ← ISigntoken, ICreateAccessToken
         └── auth.service.ts       ← signup, signin, token helpers
+```
+
+---
+
+## Swagger / OpenAPI
+
+**Role:** Interactive API docs (Swagger UI) generated from Nest decorators. Config lives in `main.ts`; controllers and DTOs supply the metadata Swagger reads.
+
+Docs URL after boot: **`http://localhost:3000/docs`** (or your `PORT`).
+
+### App config (`main.ts`)
+
+```ts
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+
+const options = new DocumentBuilder()
+  .setTitle('Corify API')
+  .setVersion('1.0')
+  .addBearerAuth()
+  .build();
+
+const document = SwaggerModule.createDocument(app, options);
+
+SwaggerModule.setup('corify/docs', app, document, {
+  swaggerOptions: {
+    defaultModelsExpandDepth: -1,
+    docExpansion: 'none',
+  },
+});
+```
+
+| Piece                                        | Meaning                                                                                               |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `DocumentBuilder`                            | Fluent builder for the OpenAPI document metadata (title, version, auth schemes).                      |
+| `.setTitle('Corify API')`                    | Title shown in Swagger UI.                                                                            |
+| `.setVersion('1.0')`                         | API version string in the docs.                                                                       |
+| `.addBearerAuth()`                           | Registers HTTP Bearer security so the UI can send `Authorization: Bearer <token>` (Authorize button). |
+| `.build()`                                   | Produces the config object passed to `createDocument`.                                                |
+| `SwaggerModule.createDocument(app, options)` | Scans controllers/DTOs and builds the full OpenAPI JSON.                                              |
+| `SwaggerModule.setup('corify/docs', …)`      | Serves Swagger UI at `/corify/docs`.                                                                  |
+| `defaultModelsExpandDepth: -1`               | Hides the Models/Schemas section by default (cleaner UI).                                             |
+| `docExpansion: 'none'`                       | All tag groups start collapsed; expand one at a time.                                                 |
+
+### Controller tag (`@ApiTags`)
+
+Groups endpoints under a named section in Swagger UI.
+
+```ts
+import { ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Auth')
+@Controller('auth')
+export class AuthController { ... }
+```
+
+| Piece              | Meaning                                                                         |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `@ApiTags('Auth')` | Puts every route on this controller under the **Auth** tag in the docs sidebar. |
+
+Without `@ApiTags`, routes still appear but are harder to browse as the API grows. Add one tag per feature controller (e.g. `@ApiTags('Users')` later).
+
+### DTO tags (`@ApiProperty`)
+
+Makes each request-body field visible in Swagger with type, example, and required flag. Without `@ApiProperty`, Swagger often cannot infer a useful schema for the body.
+
+```ts
+export class SigninDto {
+  @ApiProperty({
+    type: String,
+    example: 'testuser@gmail.com',
+    required: true,
+  })
+  @IsNotEmpty()
+  @IsEmail()
+  readonly email: string;
+
+  @ApiProperty({
+    type: String,
+    example: 'Test@123',
+    required: false,
+  })
+  @IsNotEmpty()
+  @IsStrongPassword()
+  readonly password: string;
+}
+```
+
+Same pattern on `SignupDto` for `name`, `email`, and `password`.
+
+| `@ApiProperty` option | Meaning                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `type`                | OpenAPI type shown in the schema (`String`, etc.).          |
+| `example`             | Sample value pre-filled in “Try it out”.                    |
+| `required`            | Whether Swagger marks the field as required in the docs UI. |
+
+**Note:** `@ApiProperty` is **documentation only**. Runtime validation still comes from `class-validator` + the global `ValidationPipe`. Keep both: Swagger for humans, validators for the server.
+
+```
+main.ts (DocumentBuilder + setup)
+        │
+        ▼
+  /corify/docs UI
+        │
+   ┌────┴────┐
+   ▼         ▼
+@ApiTags   @ApiProperty
+(controller) (DTO fields)
 ```
