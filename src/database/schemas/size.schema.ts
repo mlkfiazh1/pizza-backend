@@ -6,10 +6,10 @@ export class Size {
   _id?: Types.ObjectId;
 
   @Prop({ type: String, allowNull: false })
-  name!: string;
+  name: string;
 
   @Prop({ type: String, allowNull: false })
-  symbol!: string;
+  symbol: string;
 
   @Prop({ type: Number, default: 1 })
   status?: number; // 0 = DELETE, 1 = ACTIVE, 2 = Inactive

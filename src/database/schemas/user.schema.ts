@@ -6,13 +6,13 @@ export class User {
   _id?: Types.ObjectId;
 
   @Prop({ type: String, allowNull: false })
-  name!: string;
+  name: string;
 
   @Prop({ type: String, allowNull: false })
-  email!: string;
+  email: string;
 
   @Prop({ type: String, allowNull: false })
-  password!: string;
+  password: string;
 
   @Prop({ type: Number, default: 2 })
   role?: number; // 1 = ADMIN, 2 = CUSTOMER
