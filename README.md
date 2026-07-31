@@ -549,14 +549,14 @@ Docs URL after boot: **`http://localhost:3000/docs`** (or your `PORT`).
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 const options = new DocumentBuilder()
-  .setTitle('Corify API')
+  .setTitle('Pizza API')
   .setVersion('1.0')
   .addBearerAuth()
   .build();
 
 const document = SwaggerModule.createDocument(app, options);
 
-SwaggerModule.setup('corify/docs', app, document, {
+SwaggerModule.setup('docs', app, document, {
   swaggerOptions: {
     defaultModelsExpandDepth: -1,
     docExpansion: 'none',
@@ -572,7 +572,7 @@ SwaggerModule.setup('corify/docs', app, document, {
 | `.addBearerAuth()`                           | Registers HTTP Bearer security so the UI can send `Authorization: Bearer <token>` (Authorize button). |
 | `.build()`                                   | Produces the config object passed to `createDocument`.                                                |
 | `SwaggerModule.createDocument(app, options)` | Scans controllers/DTOs and builds the full OpenAPI JSON.                                              |
-| `SwaggerModule.setup('corify/docs', …)`      | Serves Swagger UI at `/corify/docs`.                                                                  |
+| `SwaggerModule.setup('docs', …)`             | Serves Swagger UI at `docs`.                                                                          |
 | `defaultModelsExpandDepth: -1`               | Hides the Models/Schemas section by default (cleaner UI).                                             |
 | `docExpansion: 'none'`                       | All tag groups start collapsed; expand one at a time.                                                 |
 
@@ -641,3 +641,143 @@ main.ts (DocumentBuilder + setup)
 @ApiTags   @ApiProperty
 (controller) (DTO fields)
 ```
+
+---
+
+## Exception filter & response interceptor
+
+`AppModule` registers a **global exception filter** and a **global response interceptor** so every route returns the same envelope:
+
+```ts
+{
+  (success, message, data, metadata);
+}
+```
+
+```ts
+// app.module.ts
+providers: [
+  { provide: APP_FILTER, useClass: ExceptionsFilter },
+  { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+],
+```
+
+| Token             | Class                  | Role                                               |
+| ----------------- | ---------------------- | -------------------------------------------------- |
+| `APP_FILTER`      | `ExceptionsFilter`     | Catch thrown errors and shape the error response.  |
+| `APP_INTERCEPTOR` | `TransformInterceptor` | Wrap successful handler results in the same shape. |
+
+```
+Request
+   │
+   ▼
+Controller / Service
+   │
+   ├── success ──► TransformInterceptor ──► { success: true, message, data, metadata }
+   │
+   └── throw ────► ExceptionsFilter ──────► { success: false, message, data: null, metadata: null }
+```
+
+---
+
+### Exception filter (`common/filter`)
+
+**Role:** Global catch-all. Any unhandled exception (validation `400`, auth `401`/`403`, unexpected `500`, etc.) is turned into a consistent JSON body instead of Nest’s default error format.
+
+```ts
+@Catch()
+export class ExceptionsFilter implements ExceptionFilter {
+  constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
+
+  catch(exception: any, host: ArgumentsHost): void {
+    const { httpAdapter } = this.httpAdapterHost;
+    const ctx = host.switchToHttp();
+
+    const httpStatus =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    const message = Array.isArray(exception?.response?.message)
+      ? exception.response.message.join(', ')
+      : exception?.response?.message || 'Something went wrong';
+
+    const responseBody = {
+      success: false,
+      message: message,
+      data: null,
+      metadata: null,
+    };
+
+    httpAdapter.reply(ctx.getResponse(), responseBody, httpStatus);
+  }
+}
+```
+
+| Piece                     | Meaning                                                                |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `@Catch()`                | Catch **all** exception types (not only `HttpException`).              |
+| `HttpAdapterHost`         | Platform-agnostic reply helper (works with Express or Fastify).        |
+| `exception.getStatus()`   | Use the status from Nest `HttpException`s; otherwise default to `500`. |
+| `response.message` join   | Flatten validation-pipe message arrays into one string.                |
+| `success: false` envelope | Same keys as success responses so clients always read one shape.       |
+
+**Example error response** (e.g. failed DTO validation):
+
+```json
+{
+  "success": false,
+  "message": "email must be an email, password is not strong enough",
+  "data": null,
+  "metadata": null
+}
+```
+
+---
+
+### Transform interceptor (`common/interceptor`)
+
+**Role:** Runs after a successful handler. If the handler already returned the envelope (`success` is set), it passes through; otherwise it wraps the result.
+
+```ts
+@Injectable()
+export class TransformInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler) {
+    return next.handle().pipe(
+      map((result) => {
+        if (result?.success !== undefined) return result;
+
+        return {
+          success: true,
+          message: result?.message ?? 'Success',
+          data: result?.data ?? null,
+          metadata: result?.metadata ?? null,
+        };
+      }),
+    );
+  }
+}
+```
+
+| Piece                           | Meaning                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| `next.handle()`                 | Continues to the route handler; returns an RxJS `Observable` of the result.             |
+| `map(...)`                      | Transforms the outgoing value before it is sent to the client.                          |
+| `result?.success !== undefined` | Skip wrapping when the service already returned `{ success, message, data, metadata }`. |
+| Defaults (`'Success'`, `null`)  | Fill missing `message` / `data` / `metadata` so the envelope is always complete.        |
+
+**Example success response** (handler returns `{ data: { access_token, user }, message: 'Signed in' }`):
+
+```json
+{
+  "success": true,
+  "message": "Signed in",
+  "data": {
+    "access_token": "...",
+    "user": { "_id": "...", "email": "..." }
+  },
+  "metadata": null
+}
+```
+
+Services can return either a bare payload (interceptor wraps it) or the full envelope (interceptor leaves it alone). Errors never reach this interceptor — the filter handles those.
