@@ -1,4 +1,4 @@
-import { Model } from 'mongoose';
+import { Model, QueryFilter, QueryOptions } from 'mongoose';
 import { Category } from '../schemas/category.schema';
 import { MODEL } from '../consts';
 import { InjectModel } from '@nestjs/mongoose';
@@ -10,4 +10,8 @@ export class CategoryRepository {
     @InjectModel(MODEL.CATEGORY)
     private readonly categoryModel: Model<Category>,
   ) {}
+
+  async find(filter: QueryFilter<Category>, options: QueryOptions<Document>) {
+    return this.categoryModel.find(filter, {}, options);
+  }
 }
