@@ -6,6 +6,10 @@ import { CategoryRepository } from './repositories/category.repository';
 import { SizeRepository } from './repositories/size.repository';
 import { UserRepository } from './repositories/user.repository';
 import { ContactRepository } from './repositories/contact.repository';
+import { PizzaRepository } from './repositories/pizza.repository';
+import { PizzaSizeRepository } from './repositories/pizza-size.repository';
+import { OrderRepository } from './repositories/order.repository';
+import { OrderDetailRepository } from './repositories/order-details.repository';
 
 @Module({
   imports: [
@@ -19,12 +23,20 @@ import { ContactRepository } from './repositories/contact.repository';
     SizeRepository,
     CategoryRepository,
     ContactRepository,
+    PizzaRepository,
+    PizzaSizeRepository,
+    OrderRepository,
+    OrderDetailRepository,
   ],
   exports: [
     UserRepository,
     SizeRepository,
     CategoryRepository,
     ContactRepository,
+    PizzaRepository,
+    PizzaSizeRepository,
+    OrderRepository,
+    OrderDetailRepository,
   ],
 })
 export class DatabaseModule {}
