@@ -6,10 +6,10 @@ export class Size {
   @Prop({ type: SchemaTypes.ObjectId })
   _id?: Types.ObjectId;
 
-  @Prop({ type: String, allowNull: false })
+  @Prop({ type: String, required: true })
   name: string;
 
-  @Prop({ type: String, allowNull: false })
+  @Prop({ type: String, required: true })
   symbol: string;
 
   @Prop({ type: Number, default: 1 })

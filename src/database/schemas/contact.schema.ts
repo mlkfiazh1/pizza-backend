@@ -2,12 +2,18 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { SchemaTypes, Types } from 'mongoose';
 
 @Schema({})
-export class Category {
+export class Contact {
   @Prop({ type: SchemaTypes.ObjectId })
   _id?: Types.ObjectId;
 
   @Prop({ type: String, required: true })
   name: string;
+
+  @Prop({ type: String, required: true })
+  email: string;
+
+  @Prop({ type: String, required: true })
+  message: string;
 
   @Prop({ type: Number, default: 1 })
   status?: number; // 0 = DELETE, 1 = ACTIVE, 2 = Inactive
@@ -19,4 +25,4 @@ export class Category {
   updated_at?: Date;
 }
 
-export const CategorySchema = SchemaFactory.createForClass(Category);
+export const ContactSchema = SchemaFactory.createForClass(Contact);
