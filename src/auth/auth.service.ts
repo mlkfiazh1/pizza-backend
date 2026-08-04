@@ -6,6 +6,7 @@ import { Types } from 'mongoose';
 import { ISigntoken } from './auth.interface';
 import Crypterjs from 'crypterjs';
 import * as jwt from 'jsonwebtoken';
+import { EnumStatus } from '../common/enum';
 
 @Injectable()
 export class AuthService {
@@ -14,7 +15,7 @@ export class AuthService {
   async signup(payload: SignupDto) {
     const user = await this.userRepository.findOne({
       email: payload.email,
-      status: { $in: [1, 2] },
+      status: { $in: [EnumStatus.ACTIVE, EnumStatus.INACTIVE] },
     });
 
     if (user) {
@@ -30,7 +31,7 @@ export class AuthService {
   async signin(payload: SigninDto) {
     const user = await this.userRepository.findOne({
       email: payload.email,
-      status: { $in: [1, 2] },
+      status: { $in: [EnumStatus.ACTIVE, EnumStatus.INACTIVE] },
     });
 
     if (!user) {

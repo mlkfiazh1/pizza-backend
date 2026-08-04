@@ -5,6 +5,8 @@ import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { ContactModule } from './contact/contact.module';
 import { SizeModule } from './size/size.module';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthGuard } from './common/guard';
 
 @Module({
   imports: [
@@ -15,5 +17,6 @@ import { SizeModule } from './size/size.module';
     CategoryModule,
     SizeModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
 })
 export class AppModule {}
