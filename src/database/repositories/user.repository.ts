@@ -16,7 +16,6 @@ export class UserRepository {
 
   async create(document: Partial<User>) {
     const user = new this.userModel(document);
-    console.log(user, document);
     return (await user.save()).toJSON();
   }
 }

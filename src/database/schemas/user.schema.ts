@@ -16,7 +16,7 @@ export class User {
   password: string;
 
   @Prop({ type: Number, default: 2 })
-  role?: number; // 1 = ADMIN, 2 = CUSTOMER
+  role: number; // 1 = ADMIN, 2 = CUSTOMER
 
   @Prop({ type: Number, allowNull: true })
   otp_code?: number;

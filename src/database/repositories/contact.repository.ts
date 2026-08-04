@@ -14,7 +14,6 @@ export class ContactRepository {
 
   async create(document: Partial<Contact>) {
     const contact = new this.contactModel(document);
-    console.log(contact, document);
     return (await contact.save()).toJSON();
   }
 }

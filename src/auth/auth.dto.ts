@@ -28,3 +28,23 @@ export class SignupDto {
   @IsStrongPassword()
   password: string;
 }
+
+export class SigninDto {
+  @ApiProperty({
+    type: String,
+    example: 'testuser@gmail.com',
+    required: true,
+  })
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({
+    type: String,
+    example: 'testuser@123',
+    required: true,
+  })
+  @IsNotEmpty()
+  @IsStrongPassword()
+  password: string;
+}

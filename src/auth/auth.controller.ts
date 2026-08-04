@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SignupDto } from './auth.dto';
+import { SigninDto, SignupDto } from './auth.dto';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Auth')
@@ -13,5 +13,12 @@ export class AuthController {
     await this.authService.signup(payload);
 
     return { message: 'User created successfully' };
+  }
+
+  @Post('/v1/sign-in')
+  async signin(@Body() payload: SigninDto) {
+    const response = await this.authService.signin(payload);
+
+    return { message: 'User signed in successfully', data: response };
   }
 }

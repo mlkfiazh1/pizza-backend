@@ -649,9 +649,7 @@ main.ts (DocumentBuilder + setup)
 `AppModule` registers a **global exception filter** and a **global response interceptor** so every route returns the same envelope:
 
 ```ts
-{
-  (success, message, data, metadata);
-}
+{ success, message, data, metadata }
 ```
 
 ```ts
@@ -662,10 +660,10 @@ providers: [
 ],
 ```
 
-| Token             | Class                  | Role                                               |
-| ----------------- | ---------------------- | -------------------------------------------------- |
-| `APP_FILTER`      | `ExceptionsFilter`     | Catch thrown errors and shape the error response.  |
-| `APP_INTERCEPTOR` | `TransformInterceptor` | Wrap successful handler results in the same shape. |
+| Token             | Class                   | Role                                              |
+| ----------------- | ----------------------- | ------------------------------------------------- |
+| `APP_FILTER`      | `ExceptionsFilter`      | Catch thrown errors and shape the error response. |
+| `APP_INTERCEPTOR` | `TransformInterceptor`  | Wrap successful handler results in the same shape.|
 
 ```
 Request
@@ -714,13 +712,13 @@ export class ExceptionsFilter implements ExceptionFilter {
 }
 ```
 
-| Piece                     | Meaning                                                                |
-| ------------------------- | ---------------------------------------------------------------------- |
-| `@Catch()`                | Catch **all** exception types (not only `HttpException`).              |
-| `HttpAdapterHost`         | Platform-agnostic reply helper (works with Express or Fastify).        |
-| `exception.getStatus()`   | Use the status from Nest `HttpException`s; otherwise default to `500`. |
-| `response.message` join   | Flatten validation-pipe message arrays into one string.                |
-| `success: false` envelope | Same keys as success responses so clients always read one shape.       |
+| Piece                         | Meaning                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@Catch()`                    | Catch **all** exception types (not only `HttpException`).                                        |
+| `HttpAdapterHost`             | Platform-agnostic reply helper (works with Express or Fastify).                                  |
+| `exception.getStatus()`       | Use the status from Nest `HttpException`s; otherwise default to `500`.                           |
+| `response.message` join       | Flatten validation-pipe message arrays into one string.                                          |
+| `success: false` envelope     | Same keys as success responses so clients always read one shape.                                 |
 
 **Example error response** (e.g. failed DTO validation):
 
@@ -759,12 +757,12 @@ export class TransformInterceptor implements NestInterceptor {
 }
 ```
 
-| Piece                           | Meaning                                                                                 |
-| ------------------------------- | --------------------------------------------------------------------------------------- |
-| `next.handle()`                 | Continues to the route handler; returns an RxJS `Observable` of the result.             |
-| `map(...)`                      | Transforms the outgoing value before it is sent to the client.                          |
-| `result?.success !== undefined` | Skip wrapping when the service already returned `{ success, message, data, metadata }`. |
-| Defaults (`'Success'`, `null`)  | Fill missing `message` / `data` / `metadata` so the envelope is always complete.        |
+| Piece                              | Meaning                                                                                         |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `next.handle()`                    | Continues to the route handler; returns an RxJS `Observable` of the result.                     |
+| `map(...)`                         | Transforms the outgoing value before it is sent to the client.                                  |
+| `result?.success !== undefined`    | Skip wrapping when the service already returned `{ success, message, data, metadata }`.         |
+| Defaults (`'Success'`, `null`)     | Fill missing `message` / `data` / `metadata` so the envelope is always complete.                |
 
 **Example success response** (handler returns `{ data: { access_token, user }, message: 'Signed in' }`):
 
@@ -781,3 +779,163 @@ export class TransformInterceptor implements NestInterceptor {
 ```
 
 Services can return either a bare payload (interceptor wraps it) or the full envelope (interceptor leaves it alone). Errors never reach this interceptor — the filter handles those.
+
+---
+
+## Auth guard & decorators
+
+**Role:** Protect routes by role. A global `AuthGaurd` runs on every request; route handlers declare who may enter with `@Auth(...)`. After a successful check, handlers can read the decoded token via `@User()`.
+
+```
+Request
+   │
+   ▼
+AuthGaurd (APP_GUARD)     ← reads @Auth metadata via Reflector
+   │
+   ├── no / invalid token ──► 401 / 500
+   ├── wrong role ──────────► 400 Permission denied
+   └── ok ──► req.user = decoded JWT
+                │
+                ▼
+           Controller handler
+                │
+                └── @User() ──► returns req.user
+```
+
+Registered globally in `AppModule` (same pattern as the filter / interceptor):
+
+```ts
+providers: [
+  { provide: APP_GUARD, useClass: AuthGaurd },
+  // ...
+],
+```
+
+Because it is global, **every** route must declare roles with `@Auth(...)` (or the guard will fail when looking up allowed roles / token).
+
+---
+
+### `@Auth(...roles)` (`common/decorators/auth.decorator.ts`)
+
+**Role:** Attach allowed roles to a route handler as Nest metadata. The guard later reads that metadata with `Reflector`.
+
+```ts
+import { SetMetadata } from '@nestjs/common';
+import { EnumRole } from '../enums';
+
+export const Auth = (...roles: EnumRole[]) => SetMetadata('role', roles);
+```
+
+| Piece                         | Meaning                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `SetMetadata('role', roles)`  | Stores the role list under the key `'role'` on the handler.             |
+| `...roles: EnumRole[]`        | One or more roles that may access the route.                            |
+
+Roles come from `EnumRole`:
+
+| Value | Enum            | Typical use                                      |
+| ----- | --------------- | ------------------------------------------------ |
+| `0`   | `EnumRole.GUEST`  | Public routes (sign-in / sign-up); token optional |
+| `1`   | `EnumRole.ADMIN`  | Admin-only routes                                 |
+| `2`   | `EnumRole.USER`   | Authenticated customer routes                     |
+
+**Example** (public auth endpoints):
+
+```ts
+@Auth(EnumRole.GUEST)
+@Post('/v1/sign-in')
+async signin(@Body() payload: SigninDto) { ... }
+
+@Auth(EnumRole.GUEST)
+@Post('/v1/sign-up')
+async signup(@Body() payload: SignupDto) { ... }
+```
+
+For a protected route, pass the roles that may call it, e.g. `@Auth(EnumRole.USER)` or `@Auth(EnumRole.ADMIN, EnumRole.USER)`.
+
+---
+
+### `AuthGaurd` (`common/guard/index.ts`)
+
+**Role:** `CanActivate` guard. Decrypts / verifies the Bearer token, checks the caller’s role against `@Auth` metadata, and attaches the payload to `req.user`.
+
+```ts
+@Injectable()
+export class AuthGaurd implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest();
+    const roles = this.reflector.get<number[]>('role', context.getHandler());
+
+    // 1) Bearer token from Authorization header
+    // 2) GUEST + no token → allow
+    // 3) Decrypt (Crypterjs) → jwt.verify → ISigntoken
+    // 4) roles.includes(decoded.role) or Permission denied
+    // 5) req.user = decoded; return true
+  }
+}
+```
+
+| Step | Behavior                                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------- |
+| 1    | Read `Authorization: Bearer <token>`.                                                             |
+| 2    | If route allows `GUEST` and there is **no** token → allow (public).                               |
+| 3    | No token on a non-guest (or guest-with-token) path → `UnauthorizedException`.                     |
+| 4    | Decrypt with `Crypterjs(TOKEN_SECRET)`, then `jwt.verify` → `{ _id, role, password }`.            |
+| 5    | If `decoded.role` is not in the `@Auth(...)` list → `BadRequestException('Permission denied')`.  |
+| 6    | On success: `req.user = decoded` so `@User()` (and handlers) can use it.                          |
+
+Guest routes can still send a token; if they do, it is verified and the role must still be in the allowed list.
+
+---
+
+### `@User()` (`common/decorators/user.decorator.ts`)
+
+**Role:** Param decorator that pulls `request.user` (set by the guard) into a handler argument.
+
+```ts
+export const User = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;
+  },
+);
+```
+
+**Example** on a protected route:
+
+```ts
+@Auth(EnumRole.USER)
+@Get('/v1/me')
+async me(@User() user: ISigntoken) {
+  return { data: { _id: user._id, role: user.role } };
+}
+```
+
+| Piece                    | Meaning                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| `createParamDecorator`   | Nest factory for custom `@Param`-style injectors.               |
+| `request.user`           | JWT payload assigned by `AuthGaurd` after a successful check.   |
+
+Without a successful guard run, `request.user` is undefined — only use `@User()` on routes that require (and pass) auth.
+
+---
+
+### How the three pieces fit
+
+| File / symbol              | Layer        | Job                                              |
+| -------------------------- | ------------ | ------------------------------------------------ |
+| `@Auth(...roles)`          | Decorator    | Declare which roles may hit the route.           |
+| `AuthGaurd` (`APP_GUARD`)  | Guard        | Enforce token + role; set `req.user`.            |
+| `@User()`                  | Param decor. | Inject `req.user` into the controller method.    |
+
+```
+@Auth(EnumRole.USER)     → metadata key 'role' = [2]
+        │
+        ▼
+AuthGaurd reads metadata → verifies Bearer token → checks role → req.user
+        │
+        ▼
+handler(@User() user)    → user === req.user
+```
