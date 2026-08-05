@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserRepository } from '../database/repositories/user.repository';
-import { SigninDto, SignupDto } from './auth.dto';
+import { MeDto, SigninDto, SignupDto } from './auth.dto';
 import bcrypt from 'bcryptjs';
 import { Types } from 'mongoose';
 import { ISigntoken } from './auth.interface';
@@ -61,6 +61,24 @@ export class AuthService {
         email: user.email,
         role: user.role,
       },
+    };
+  }
+
+  async me(payload: MeDto) {
+    const user = await this.userRepository.findOne({
+      _id: payload._id,
+      status: { $in: [EnumStatus.ACTIVE, EnumStatus.INACTIVE] },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    return {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
     };
   }
 

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsStrongPassword } from 'class-validator';
+import { Types } from 'mongoose';
 
 export class SignupDto {
   @ApiProperty({
@@ -47,4 +48,9 @@ export class SigninDto {
   @IsNotEmpty()
   @IsStrongPassword()
   password: string;
+}
+
+export class MeDto {
+  _id: string | Types.ObjectId;
+  role: number;
 }

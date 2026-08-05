@@ -6,6 +6,7 @@ import { EnumRole } from '../common/enum';
 import { Auth } from '../common/decorators/auth.decorator';
 
 @ApiTags('Contact')
+@ApiBearerAuth()
 @Controller('contact')
 export class ContactController {
   constructor(private contactService: ContactService) {}
