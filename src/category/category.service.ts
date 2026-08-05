@@ -13,4 +13,14 @@ export class CategoryService {
 
     return category;
   }
+
+  async findOne(id: string) {
+    const category = await this.categoryRepository.findOne({ _id: id });
+
+    if (!category) {
+      throw new Error('Category not found');
+    }
+
+    return { _id: category._id, name: category.name };
+  }
 }

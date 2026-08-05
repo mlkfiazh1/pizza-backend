@@ -14,4 +14,8 @@ export class CategoryRepository {
   async find(filter: QueryFilter<Category>, options: QueryOptions<Document>) {
     return this.categoryModel.find(filter, {}, options);
   }
+
+  async findOne(filter: QueryFilter<Category>) {
+    return this.categoryModel.findOne(filter);
+  }
 }

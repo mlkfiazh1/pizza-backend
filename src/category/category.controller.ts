@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { CategoryService } from './category.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EnumRole } from '../common/enum';
@@ -15,6 +15,14 @@ export class CategoryController {
   async findAll() {
     const response = await this.categoryService.find();
 
-    return { message: 'User created successfully', data: response };
+    return { message: 'categories fetched successfully', data: response };
+  }
+
+  @Auth(EnumRole.ADMIN, EnumRole.USER)
+  @Get('/:id')
+  async findOne(@Param('id') payload: string) {
+    const response = await this.categoryService.findOne(payload);
+
+    return { message: 'category fetched successfully', data: response };
   }
 }
