@@ -5,8 +5,10 @@ import { AuthModule } from './auth/auth.module';
 import { CategoryModule } from './category/category.module';
 import { ContactModule } from './contact/contact.module';
 import { SizeModule } from './size/size.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthGuard } from './common/guard';
+import { ExceptionsFilter } from './common/filter';
+import { TransformInterceptor } from './common/interceptor';
 
 @Module({
   imports: [
@@ -17,6 +19,10 @@ import { AuthGuard } from './common/guard';
     CategoryModule,
     SizeModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_FILTER, useClass: ExceptionsFilter },
+    { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
+  ],
 })
 export class AppModule {}
