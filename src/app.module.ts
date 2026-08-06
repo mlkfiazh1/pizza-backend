@@ -9,6 +9,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthGuard } from './common/guard';
 import { ExceptionsFilter } from './common/filter';
 import { TransformInterceptor } from './common/interceptor';
+import { PizzasModule } from './pizzas/pizzas.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TransformInterceptor } from './common/interceptor';
     AuthModule,
     CategoryModule,
     SizeModule,
+    PizzasModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

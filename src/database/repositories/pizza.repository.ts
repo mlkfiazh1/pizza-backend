@@ -10,4 +10,9 @@ export class PizzaRepository {
     @InjectModel(MODEL.PIZZA)
     private readonly pizzaModel: Model<Pizza>,
   ) {}
+
+  async create(payload: Partial<Pizza>) {
+    const pizza = new this.pizzaModel(payload);
+    return await pizza.save();
+  }
 }
