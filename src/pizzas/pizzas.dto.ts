@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsMongoId, IsNotEmpty, IsString } from 'class-validator';
 
 export class AddPizzaDto {
@@ -29,6 +29,8 @@ export class AddPizzaDto {
   @IsString()
   description: string;
 
-  //   @ApiProperty({ type: 'string', format: 'binary', required: false })
-  //   file: Express.Multer.File | string;
+  @ApiProperty({ type: 'string', format: 'binary', required: false })
+  file: Express.Multer.File | string;
 }
+
+export class UpdatePizzaDto extends PartialType(AddPizzaDto) {}

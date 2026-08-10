@@ -10,10 +10,16 @@ import { AuthGuard } from './common/guard';
 import { ExceptionsFilter } from './common/filter';
 import { TransformInterceptor } from './common/interceptor';
 import { PizzasModule } from './pizzas/pizzas.module';
+import { join } from 'path';
+import { ServeStaticModule } from '@nestjs/serve-static';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/public/',
+    }),
     DatabaseModule,
     ContactModule,
     AuthModule,
