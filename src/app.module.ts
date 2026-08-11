@@ -12,6 +12,7 @@ import { TransformInterceptor } from './common/interceptor';
 import { PizzasModule } from './pizzas/pizzas.module';
 import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { PizzaSizeModule } from './pizza-size/pizza-size.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
     CategoryModule,
     SizeModule,
     PizzasModule,
+    PizzaSizeModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

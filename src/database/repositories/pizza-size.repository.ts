@@ -10,4 +10,9 @@ export class PizzaSizeRepository {
     @InjectModel(MODEL.PIZZA_SIZE)
     private readonly pizzaSizeModel: Model<PizzaSize>,
   ) {}
+
+  async create(payload: Partial<PizzaSize>) {
+    const pizza = new this.pizzaSizeModel(payload);
+    return await pizza.save();
+  }
 }

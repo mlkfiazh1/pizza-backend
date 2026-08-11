@@ -7,9 +7,6 @@ export class PizzaSize {
   @Prop({ type: SchemaTypes.ObjectId })
   _id: Types.ObjectId;
 
-  @Prop({ type: String, required: true })
-  name: string;
-
   @Prop({ type: SchemaTypes.ObjectId, ref: MODEL.PIZZA, required: true })
   pizza: Types.ObjectId | string;
 
