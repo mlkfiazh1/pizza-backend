@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsMongoId, IsNotEmpty, IsNumber } from 'class-validator';
 
@@ -31,3 +31,5 @@ export class AddPizzaSizeDto {
   @IsNumber()
   price: number;
 }
+
+export class UpdatePizzaSizeDto extends PartialType(AddPizzaSizeDto) {}
