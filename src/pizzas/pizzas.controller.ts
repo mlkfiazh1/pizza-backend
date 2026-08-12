@@ -40,10 +40,13 @@ export class PizzasController {
     return { message: 'Pizza list fetched successfully', data: response };
   }
 
-  // @Get(':id')
-  // findOne(@Param('id') id: string) {
-  //   return this.pizzasService.findOne(+id);
-  // }
+  @Get(':_id')
+  @Auth(EnumRole.ADMIN, EnumRole.USER, EnumRole.GUEST)
+  async findOne(@Param('_id') _id: string) {
+    const response = await this.pizzasService.findOne(_id);
+
+    return { message: 'Pizza fetched successfully', data: response };
+  }
 
   @Patch(':_id')
   @Auth(EnumRole.ADMIN)

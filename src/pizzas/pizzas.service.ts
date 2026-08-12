@@ -59,9 +59,79 @@ export class PizzasService {
     return pizzas;
   }
 
-  // findOne(id: number) {
-  //   return `This action returns a #${id} pizza`;
-  // }
+  async findOne(_id: string) {
+    const pizza = await this.pizzaRepository.aggregate([
+      {
+        $match: {
+          _id: new Types.ObjectId(_id),
+          status: EnumStatus.ACTIVE,
+        },
+      },
+      {
+        $lookup: {
+          from: 'category',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      {
+        $unwind: '$category',
+      },
+      {
+        $lookup: {
+          from: 'pizza_size',
+          localField: '_id',
+          foreignField: 'pizza',
+          as: 'pizza_sizes',
+          pipeline: [
+            {
+              $lookup: {
+                from: 'size',
+                localField: 'size',
+                foreignField: '_id',
+                as: 'size',
+                pipeline: [
+                  {
+                    $project: {
+                      _id: 1,
+                      name: 1,
+                      symbol: 1,
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              $unwind: '$size',
+            },
+            {
+              $project: {
+                _id: 1,
+                size: 1,
+                price: 1,
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          category: {
+            _id: 1,
+            name: 1,
+          },
+          description: 1,
+          image: 1,
+          pizza_sizes: 1,
+        },
+      },
+    ]);
+
+    return pizza;
+  }
 
   async update(
     _id: string,
