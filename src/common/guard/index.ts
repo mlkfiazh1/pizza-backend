@@ -53,6 +53,7 @@ export class AuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      // console.log('error', error);
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Internal server error');
     }

@@ -13,6 +13,7 @@ import { PizzasModule } from './pizzas/pizzas.module';
 import { join } from 'path';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { PizzaSizeModule } from './pizza-size/pizza-size.module';
+import { OrderModule } from './order/order.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PizzaSizeModule } from './pizza-size/pizza-size.module';
     SizeModule,
     PizzasModule,
     PizzaSizeModule,
+    OrderModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

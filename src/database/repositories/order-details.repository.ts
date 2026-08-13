@@ -10,4 +10,14 @@ export class OrderDetailRepository {
     @InjectModel(MODEL.ORDER_DETAIL)
     private readonly orderDetailModel: Model<OrderDetail>,
   ) {}
+
+  async create(payload: Partial<OrderDetail>) {
+    const pizza = new this.orderDetailModel(payload);
+    return await pizza.save();
+  }
+
+  async createMany(documents: OrderDetail[]) {
+    const insertedDocuments = await this.orderDetailModel.insertMany(documents);
+    return insertedDocuments;
+  }
 }
