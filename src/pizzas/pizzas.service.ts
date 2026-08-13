@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { AddPizzaDto, UpdatePizzaDto } from './pizzas.dto';
 import { PizzaRepository } from '../database/repositories/pizza.repository';
 import { MediaService } from '../common/services/media.service';
@@ -13,15 +18,20 @@ export class PizzasService {
   ) {}
 
   async create(payload: AddPizzaDto, file: Express.Multer.File) {
-    const filePath = await this.mediaService.uploadFile(file);
+    try {
+      const filePath = await this.mediaService.uploadFile(file);
 
-    const pizza = await this.pizzaRepository.create({
-      _id: new Types.ObjectId(),
-      ...payload,
-      image: filePath,
-    });
+      const pizza = await this.pizzaRepository.create({
+        _id: new Types.ObjectId(),
+        ...payload,
+        image: filePath,
+      });
 
-    return pizza;
+      return pizza;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Internal server error');
+    }
   }
 
   async findAll() {

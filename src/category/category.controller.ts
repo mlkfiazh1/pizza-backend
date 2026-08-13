@@ -10,7 +10,7 @@ import { Auth } from '../common/decorators/auth.decorator';
 export class CategoryController {
   constructor(private categoryService: CategoryService) {}
 
-  @Auth(EnumRole.ADMIN, EnumRole.USER)
+  // @Auth(EnumRole.ADMIN, EnumRole.USER)
   @Get()
   async findAll() {
     const response = await this.categoryService.find();
