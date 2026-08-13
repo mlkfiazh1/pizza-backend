@@ -33,3 +33,35 @@ GET /past-orders // ADMIN - CUSTOMER
 GET /past-order/:order_id // ADMIN - CUSTOMER
 
 POST /contact // CUSTOMER
+
+
+=========================== Products ============================
+
+user { _id, name, email, password, role, otp_code, status, created_at, updated_at }
+product {_id, name, description, image, status, created_at, updated_at}
+
+POST /auth/signup // USER
+POST /auth/login  // USER, ADMIN
+POST /products // ADMIN
+
+
+GET /products // ADMIN - USER
+GET /products/:id // USER
+PATCH /products/:id // USER
+DELETE /products/:id // USER
+
+POST /Orders // USER
+
+======================== Taskly ===============================
+
+user { _id, name, email, password, role, otp_code, status, created_at, updated_at }
+todos {_id, name, status, created_at, updated_at}
+
+POST /auth/signup // USER
+POST /auth/login  // USER, ADMIN
+
+GET /todos // ADMIN - USER
+POST /todos // ADMIN - USER
+GET /todos/:id // USER
+PATCH /todos/:id // USER
+DELETE /todos/:id // USER
