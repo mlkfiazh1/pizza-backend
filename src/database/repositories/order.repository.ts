@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { HydratedDocument, Model, QueryFilter } from 'mongoose';
+import { HydratedDocument, Model, PipelineStage, QueryFilter } from 'mongoose';
 import { MODEL } from '../consts';
 import { Order } from '../schemas/order.schema';
 
@@ -22,5 +22,9 @@ export class OrderRepository {
 
   async save(order: HydratedDocument<Order>) {
     return (await order.save()).toJSON();
+  }
+
+  async aggregate(pipeline?: PipelineStage[]) {
+    return await this.orderModel.aggregate(pipeline);
   }
 }

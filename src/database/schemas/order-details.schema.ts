@@ -15,8 +15,8 @@ export class OrderDetail {
   @Prop({ type: SchemaTypes.ObjectId, ref: MODEL.PIZZA, required: true })
   pizza: Types.ObjectId | string;
 
-  @Prop({ type: String, required: true })
-  size: string;
+  @Prop({ type: SchemaTypes.ObjectId, required: true })
+  size: Types.ObjectId | string;
 
   @Prop({ type: Number, required: true })
   quantity: number;

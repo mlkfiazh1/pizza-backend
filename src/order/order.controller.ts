@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Auth } from '../common/decorators/auth.decorator';
 import { User } from '../common/decorators/user.decorator';
@@ -17,6 +17,14 @@ export class OrderController {
   async create(@User() user: UserDto, @Body() payload: OrderDto) {
     const response = await this.orderService.create(user, payload);
 
-    return { message: 'Pizza size added successfully' };
+    return { message: 'order added successfully' };
+  }
+
+  @Get()
+  @Auth(EnumRole.USER, EnumRole.ADMIN)
+  async findAll(@User() user: UserDto) {
+    const response = await this.orderService.findAll(user);
+
+    return { message: 'orders fetched successfully', data: response };
   }
 }
