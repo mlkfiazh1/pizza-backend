@@ -27,4 +27,69 @@ export class OrderRepository {
   async aggregate(pipeline?: PipelineStage[]) {
     return await this.orderModel.aggregate(pipeline);
   }
+
+  async aggregateWithPagination({
+    page = 1,
+    limit = 12,
+    pipelines = [],
+  }: {
+    page?: number;
+    limit?: number;
+    pipelines?: PipelineStage[];
+  }) {
+    const [data] = await this.orderModel.aggregate([
+      ...pipelines,
+      {
+        $facet: {
+          total: [
+            {
+              $sortByCount: '$tag',
+            },
+          ],
+          data: [
+            {
+              $addFields: {
+                _id: '$_id',
+              },
+            },
+          ],
+        },
+      },
+      {
+        $unwind: '$total',
+      },
+      {
+        $project: {
+          collections: {
+            $slice: [
+              '$data',
+              (page - 1) * limit,
+              {
+                $ifNull: [limit, '$total.count'],
+              },
+            ],
+          },
+          total: '$total.count',
+          page: {
+            $ceil: { $literal: page - 1 / limit },
+          },
+          pages: {
+            $ceil: {
+              $divide: ['$total.count', limit],
+            },
+          },
+        },
+      },
+    ]);
+
+    return {
+      data: data?.collections || [],
+      meta: {
+        page: data?.page || 1,
+        pages: data?.pages || 0,
+        limit: limit || 0,
+        total: data?.total || 0,
+      },
+    };
+  }
 }

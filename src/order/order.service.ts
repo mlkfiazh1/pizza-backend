@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrderRepository } from '../database/repositories/order.repository';
-import { OrderDto, UserDto } from './order.dto';
+import { OrderDto, PagnationDto, UserDto } from './order.dto';
 import { Types } from 'mongoose';
 import { PizzaSizeRepository } from '../database/repositories/pizza-size.repository';
 import { OrderDetailRepository } from '../database/repositories/order-details.repository';
@@ -45,7 +45,7 @@ export class OrderService {
     return;
   }
 
-  async findAll(user: UserDto) {
+  async findAll(user: UserDto, pagnation: PagnationDto) {
     let filter = {
       status: EnumStatus.ACTIVE,
     };
@@ -54,67 +54,71 @@ export class OrderService {
       filter['user'] = new Types.ObjectId(user._id);
     }
 
-    const response = await this.orderRepository.aggregate([
-      {
-        $match: filter,
-      },
-      {
-        $lookup: {
-          from: 'order_detail',
-          localField: '_id',
-          foreignField: 'order',
-          as: 'order_details',
-          pipeline: [
-            {
-              $lookup: {
-                from: 'pizza',
-                localField: 'pizza',
-                foreignField: '_id',
-                as: 'pizza',
-              },
-            },
-            {
-              $unwind: '$pizza',
-            },
-            {
-              $project: {
-                _id: 1,
-                size: 1,
-                quantity: 1,
-                price: 1,
-                total: 1,
-                pizza: {
-                  _id: 1,
-                  name: 1,
-                  image: 1,
+    const response = await this.orderRepository.aggregateWithPagination({
+      page: pagnation.page,
+      limit: pagnation.limit,
+      pipelines: [
+        {
+          $match: filter,
+        },
+        {
+          $lookup: {
+            from: 'order_detail',
+            localField: '_id',
+            foreignField: 'order',
+            as: 'order_details',
+            pipeline: [
+              {
+                $lookup: {
+                  from: 'pizza',
+                  localField: 'pizza',
+                  foreignField: '_id',
+                  as: 'pizza',
                 },
               },
-            },
-          ],
-        },
-      },
-      {
-        $lookup: {
-          from: 'user',
-          localField: 'user',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      {
-        $unwind: '$user',
-      },
-      {
-        $project: {
-          _id: 1,
-          order_details: 1,
-          user: {
-            _id: 1,
-            name: 1,
+              {
+                $unwind: '$pizza',
+              },
+              {
+                $project: {
+                  _id: 1,
+                  size: 1,
+                  quantity: 1,
+                  price: 1,
+                  total: 1,
+                  pizza: {
+                    _id: 1,
+                    name: 1,
+                    image: 1,
+                  },
+                },
+              },
+            ],
           },
         },
-      },
-    ]);
+        {
+          $lookup: {
+            from: 'user',
+            localField: 'user',
+            foreignField: '_id',
+            as: 'user',
+          },
+        },
+        {
+          $unwind: '$user',
+        },
+        {
+          $project: {
+            _id: 1,
+            order_details: 1,
+            user: {
+              _id: 1,
+              name: 1,
+            },
+          },
+        },
+      ],
+    });
 
     return response;
   }

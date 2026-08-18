@@ -58,3 +58,27 @@ export class UserDto {
   _id: string | Types.ObjectId;
   role: number;
 }
+
+export class PagnationDto {
+  @ApiProperty({
+    type: Number,
+    example: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsNumber()
+  page: number;
+
+  @ApiProperty({
+    type: Number,
+    example: 2,
+    required: false,
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsNumber()
+  limit: number;
+}

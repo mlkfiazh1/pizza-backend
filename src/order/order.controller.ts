@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Auth } from '../common/decorators/auth.decorator';
 import { User } from '../common/decorators/user.decorator';
 import { EnumRole } from '../common/enum';
-import { OrderDto, UserDto } from './order.dto';
+import { OrderDto, PagnationDto, UserDto } from './order.dto';
 import { OrderService } from './order.service';
+import { metadata } from 'reflect-metadata/no-conflict';
 
 @ApiTags('Order')
 @Controller('orders')
@@ -22,9 +23,13 @@ export class OrderController {
 
   @Get()
   @Auth(EnumRole.USER, EnumRole.ADMIN)
-  async findAll(@User() user: UserDto) {
-    const response = await this.orderService.findAll(user);
+  async findAll(@User() user: UserDto, @Query() pagnation: PagnationDto) {
+    const response = await this.orderService.findAll(user, pagnation);
 
-    return { message: 'orders fetched successfully', data: response };
+    return {
+      message: 'orders fetched successfully',
+      data: response.data,
+      metadata: response.meta,
+    };
   }
 }
